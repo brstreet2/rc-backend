@@ -1,59 +1,147 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Promo & Scheduling Engine API
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+This project is a backend API for a Promotion & Scheduling Engine. The core objective is to return one deterministic active promotion for each audio based on business validity rules, scope specificity, and tie-break conflict resolution. The API is designed so that the same input conditions always produce the same winning promotion, while still supporting fallback behavior when no promotion is valid.
 
-## About Laravel
+The implementation uses Laravel 12 with PostgreSQL for the main runtime and SQLite in-memory for automated tests.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Quick Setup
+Install dependencies and initialize environment:
+```bash
+composer install
+cp .env.example .env
+php artisan key:generate
+```
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+Configure PostgreSQL in `.env`:
+```env
+DB_CONNECTION=pgsql
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_DATABASE=rc_backend
+DB_USERNAME=your_user
+DB_PASSWORD=your_password
+```
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+Run migrations and seeders:
+```bash
+php artisan migrate:fresh --seed
+```
 
-## Learning Laravel
+Start the API server:
+```bash
+php artisan serve
+```
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+Base URL: `http://127.0.0.1:8000`
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+## Test Setup
+Testing uses `.env.testing` with an in-memory SQLite database, so tests are isolated and fast:
+```bash
+php artisan test
+```
 
-## Laravel Sponsors
+## Postman Collection
+A ready-to-import Postman collection is included in this repository:
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+- `postman/rc-backend.postman_collection.json`
 
-### Premium Partners
+You can import this file directly into Postman and run requests against `http://127.0.0.1:8000`.
+Some requests already include saved example/preview responses to make behavior verification faster.
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+## Core Business Rules
+The winner selection follows four strict rule layers. First, a promotion is considered only if it is visible, within active time range, and not soft-deleted. Next, scope specificity is prioritized from exact match (`network_id`, `mformat`, `channel_id`) down to global. If multiple candidates still remain in the same scope level, conflict resolution applies in order: highest priority, then highest version, then newest `created_at`. If no candidate survives these rules, the API returns `promo = null` for that audio.
 
-## Contributing
+## Main Endpoints
+The required API surface is implemented through paginated audio listing, active audio listing, and promotion CRUD:
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/audios` | Paginated audio list |
+| `GET` | `/api/audios/active` | Paginated audio list with computed active promotion |
+| `POST` | `/api/promotions` | Create promotion |
+| `PUT` | `/api/promotions/{promotion}` | Update promotion |
+| `DELETE` | `/api/promotions/{promotion}` | Soft delete promotion |
 
-## Code of Conduct
+## Extra Features (Separated from Main)
+The extra features are intentionally separated from the main requirement and focus on operational decision support:
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+1. Promotion simulation time (`GET /api/audios/active?at=...`) was added so teams can evaluate “what would be active” at a specific timestamp without changing live data.
 
-## Security Vulnerabilities
+2. Dry-run preview (`POST /api/promotions/preview`) was added to validate business impact before writing data. It answers whether a candidate promotion would win or lose under current rules.
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+3. Audio schedule timeline (`GET /api/audios/{audio}/schedule?from=...&to=...`) was added to visualize winner transitions over a time window. This is useful for planning and debugging promotion sequencing.
 
-## License
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `GET` | `/api/audios/active?at=...` | Simulate active promotion at a specific timestamp |
+| `POST` | `/api/promotions/preview` | Dry-run candidate promotion outcome (win/lose) |
+| `GET` | `/api/audios/{audio}/schedule?from=...&to=...` | Timeline of winner transitions |
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+## Database Schema (Implemented)
+### `audio`
+| Column | Type | Nullable | Notes |
+|---|---|---|---|
+| `id` | bigint | No | Primary key |
+| `title` | varchar | No | Audio title |
+| `network_id` | bigint | Yes | Scope dimension |
+| `mformat` | varchar | Yes | Scope dimension |
+| `channel_id` | bigint | Yes | Scope dimension |
+| `created_at` | timestamp | Yes | Laravel timestamp |
+| `updated_at` | timestamp | Yes | Laravel timestamp |
+| `deleted_at` | timestamp | Yes | Soft delete column |
+
+Indexes:
+- scope index on `(network_id, mformat, channel_id)`
+- index on `deleted_at`
+
+### `promotions`
+| Column | Type | Nullable | Notes |
+|---|---|---|---|
+| `id` | bigint | No | Primary key |
+| `audio_id` | bigint | No | FK to `audio.id` |
+| `network_id` | bigint | Yes | Scope dimension |
+| `mformat` | varchar | Yes | Scope dimension |
+| `channel_id` | bigint | Yes | Scope dimension |
+| `priority` | int | No | Conflict rank (higher wins) |
+| `version` | int | No | Tie-break rank (higher wins) |
+| `visible` | boolean | No | Validity flag |
+| `start_at` | timestamp | No | Validity start |
+| `end_at` | timestamp | No | Validity end |
+| `created_at` | timestamp | Yes | Laravel timestamp / tie-break |
+| `updated_at` | timestamp | Yes | Laravel timestamp |
+| `deleted_at` | timestamp | Yes | Soft delete column |
+
+Indexes:
+- active lookup index on `(audio_id, visible, start_at, end_at)`
+- scope index on `(network_id, mformat, channel_id)`
+- conflict index on `(priority, version, created_at)`
+- index on `deleted_at`
+
+## Indexing Rationale
+The table fields are mostly requirement-driven, but the indexes are performance-driven based on query patterns used by this project:
+
+- `audio(network_id, mformat, channel_id)` helps scope-aware matching by reducing search cost when promotions are evaluated against audio scope dimensions.
+- `audio(deleted_at)` helps list endpoints skip soft-deleted rows without full scans.
+- `promotions(audio_id, visible, start_at, end_at)` helps active-promotion lookup quickly narrow candidates per audio before applying conflict logic.
+- `promotions(network_id, mformat, channel_id)` helps scope-specific filtering (`exact`, `network+mformat`, `network-only`, `global`).
+- `promotions(priority, version, created_at)` helps deterministic tie-break sorting when scope level is the same.
+- `promotions(deleted_at)` helps active and preview queries exclude soft-deleted promotions efficiently.
+
+## Test Coverage Highlights
+The test suite is controller-focused and covers both core and extra behavior. Core tests verify scope hierarchy correctness, tie-break ordering, validity filtering, and fallback handling. Additional tests cover promotion CRUD validation/behavior, simulation (`at`), preview decisions, and schedule timeline transitions.
+
+## Requirement-to-Test Traceability
+| Feature | Requirement Summary | Test Location |
+|---|---|---|
+| Audio List | Menampilkan daftar audio | `tests/Feature/Api/AudioControllerTest.php` → `test_index_returns_paginated_audio_list` |
+| Promo Validity | Promo aktif berdasarkan `visible`, waktu, dan non-soft-deleted | `tests/Feature/Api/AudioControllerTest.php` → `test_active_returns_null_when_only_hidden_expired_or_deleted_promotions_exist` |
+| Scope Priority | Scope lebih spesifik selalu menang | `tests/Feature/Api/AudioControllerTest.php` → `test_scope_hierarchy_exact_scope_beats_less_specific_scopes` and `test_scope_hierarchy_network_mformat_null_channel_beats_network_only` |
+| Conflict Resolution | Tie-break dengan `priority`, `version`, `created_at` | `tests/Feature/Api/AudioControllerTest.php` → `test_conflict_resolution_prefers_higher_priority_within_same_scope`, `test_conflict_resolution_prefers_higher_version_when_priority_is_equal`, `test_conflict_resolution_prefers_newer_created_at_when_priority_and_version_are_equal` |
+| Fallback | Audio tanpa promo valid tetap ditampilkan (`promo = null`) | `tests/Feature/Api/AudioControllerTest.php` → `test_active_returns_null_when_only_hidden_expired_or_deleted_promotions_exist` |
+
+### Extra Feature Coverage
+| Extra Feature | Test Location |
+|---|---|
+| Promotion simulation (`at`) | `tests/Feature/Api/AudioControllerTest.php` → `test_active_supports_simulation_at_parameter` |
+| Dry-run preview | `tests/Feature/Api/PromotionControllerTest.php` → `test_preview_returns_would_win_true_for_better_candidate`, `test_preview_returns_would_win_false_when_candidate_loses`, `test_preview_returns_candidate_not_active_reason_when_time_window_invalid` |
+| Audio schedule timeline | `tests/Feature/Api/AudioControllerTest.php` → `test_schedule_returns_segments_with_winners_and_message` |

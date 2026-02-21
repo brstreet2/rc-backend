@@ -27,6 +27,15 @@ Run migrations and seeders:
 php artisan migrate:fresh --seed
 ```
 
+If migration fails due to session table/driver issues, update `.env` with:
+```env
+SESSION_DRIVER=file
+```
+Then rerun migration with:
+```bash
+php artisan migrate:fresh --seed
+```
+
 Start the API server:
 ```bash
 php artisan serve

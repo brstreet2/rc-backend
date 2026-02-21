@@ -40,6 +40,14 @@ Testing uses `.env.testing` with an in-memory SQLite database, so tests are isol
 php artisan test
 ```
 
+## Postman Collection
+A ready-to-import Postman collection is included in this repository:
+
+- `postman/rc-backend.postman_collection.json`
+
+You can import this file directly into Postman and run requests against `http://127.0.0.1:8000`.
+Some requests already include saved example/preview responses to make behavior verification faster.
+
 ## Core Business Rules
 The winner selection follows four strict rule layers. First, a promotion is considered only if it is visible, within active time range, and not soft-deleted. Next, scope specificity is prioritized from exact match (`network_id`, `mformat`, `channel_id`) down to global. If multiple candidates still remain in the same scope level, conflict resolution applies in order: highest priority, then highest version, then newest `created_at`. If no candidate survives these rules, the API returns `promo = null` for that audio.
 

@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -51,5 +53,32 @@ class Promotion extends Model
     public function audio(): BelongsTo
     {
         return $this->belongsTo(Audio::class);
+    }
+
+    /**
+     * Scope a query to only include visible promotions.
+     */
+    public function scopeVisible(Builder $query): Builder
+    {
+        return $query->where('visible', true);
+    }
+
+    /**
+     * Scope a query to only include promotions active at a given moment.
+     */
+    public function scopeActiveAt(Builder $query, CarbonInterface $moment): Builder
+    {
+        return $query
+            ->whereNull('deleted_at')
+            ->where('start_at', '<=', $moment)
+            ->where('end_at', '>=', $moment);
+    }
+
+    /**
+     * Scope a query to only include promotions for given audio IDs.
+     */
+    public function scopeForAudioIds(Builder $query, array $audioIds): Builder
+    {
+        return $query->whereIn('audio_id', $audioIds);
     }
 }
